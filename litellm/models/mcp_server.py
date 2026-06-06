@@ -52,6 +52,7 @@ class LiteLLM_MCPServerTable(LiteLLMPydanticObjectBase):
     authorization_url: Optional[str] = None
     token_url: Optional[str] = None
     registration_url: Optional[str] = None
+    oauth2_flow: Optional[Literal["client_credentials", "authorization_code"]] = None
     allow_all_keys: bool = False
     available_on_public_internet: bool = True
     delegate_auth_to_upstream: bool = False
@@ -61,6 +62,7 @@ class LiteLLM_MCPServerTable(LiteLLMPydanticObjectBase):
     byok_api_key_help_url: Optional[str] = None
     has_user_credential: Optional[bool] = None
     source_url: Optional[str] = None
+    timeout: Optional[float] = None
     approval_status: Optional[str] = Field(
         default="active",
         description="Approval status: 'pending_review', 'active', 'rejected'",

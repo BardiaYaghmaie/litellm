@@ -1261,6 +1261,7 @@ class NewMCPServerRequest(LiteLLMPydanticObjectBase):
     byok_description: List[str] = Field(default_factory=list)
     byok_api_key_help_url: Optional[str] = None
     source_url: Optional[str] = None
+    timeout: Optional[float] = None
     # BYOM submission fields — set by the endpoint, not by the caller.
     # Any caller-provided values are silently overridden before persistence.
     approval_status: Optional[str] = Field(
@@ -1337,6 +1338,7 @@ class UpdateMCPServerRequest(LiteLLMPydanticObjectBase):
     authorization_url: Optional[str] = None
     token_url: Optional[str] = None
     registration_url: Optional[str] = None
+    oauth2_flow: Optional[Literal["client_credentials", "authorization_code"]] = None
     allow_all_keys: bool = False
     available_on_public_internet: bool = True
     delegate_auth_to_upstream: bool = False
@@ -1345,6 +1347,7 @@ class UpdateMCPServerRequest(LiteLLMPydanticObjectBase):
     byok_description: List[str] = Field(default_factory=list)
     byok_api_key_help_url: Optional[str] = None
     source_url: Optional[str] = None
+    timeout: Optional[float] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -3005,6 +3008,19 @@ class AllCallbacks(LiteLLMPydanticObjectBase):
         ui_callback_name="Traceloop",
     )
 
+    galileo: CallbackOnUI = CallbackOnUI(
+        litellm_callback_name="galileo",
+        litellm_callback_params=[
+            "GALILEO_API_KEY",
+            "GALILEO_PROJECT_ID",
+            "GALILEO_LOG_STREAM_ID",
+            "GALILEO_BASE_URL",
+            "GALILEO_USERNAME",
+            "GALILEO_PASSWORD",
+        ],
+        ui_callback_name="Galileo",
+    )
+
 
 class SpendLogsMetadata(TypedDict):
     """
@@ -3919,6 +3935,25 @@ class JWTRoutingOverride(BaseModel):
     }
 
 
+class UnregisteredJWTClientBehavior(str, enum.Enum):
+    """
+    Controls what happens when `virtual_key_claim_field` is configured but the
+    JWT claim value has no registered mapping in `litellm_jwtkeymapping`.
+
+    - fallback_team_mapping: Fall through to standard team-based JWT auth (default,
+      backward-compatible).
+    - reject: Immediately return HTTP 403. Use this when every valid JWT client
+      must have a pre-registered virtual key — unknown callers are denied.
+    - auto_register: Automatically create a new virtual key and mapping on first
+      encounter. The new key has no budget/model restrictions; admins can tighten
+      it later via /jwt_client/update.
+    """
+
+    FALLBACK_TEAM_MAPPING = "fallback_team_mapping"
+    REJECT = "reject"
+    AUTO_REGISTER = "auto_register"
+
+
 class JWTIssuerConfig(BaseModel):
     """
     Issuer-bound JWT validation configuration.
@@ -4085,6 +4120,15 @@ class LiteLLM_JWTAuth(LiteLLMPydanticObjectBase):
         default=300,
         description="TTL (seconds) for caching JWT-to-virtual-key mapping lookups.",
     )
+    unregistered_jwt_client_behavior: UnregisteredJWTClientBehavior = Field(
+        default=UnregisteredJWTClientBehavior.FALLBACK_TEAM_MAPPING,
+        description=(
+            "What to do when virtual_key_claim_field is set but the JWT claim value "
+            "has no registered mapping. 'fallback_team_mapping' (default): fall through "
+            "to team-based JWT auth. 'reject': return HTTP 403. "
+            "'auto_register': auto-create a virtual key and mapping on first encounter."
+        ),
+    )
     routing_overrides: Optional[List[JWTRoutingOverride]] = Field(
         default=None,
         description="Optional claim-based routing overrides for JWT-shaped tokens. Matching rules route requests to oauth2 before default JWT flow.",
@@ -4103,6 +4147,13 @@ class LiteLLM_JWTAuth(LiteLLMPydanticObjectBase):
         # check; the runtime gate in ``get_instance_fn`` refuses
         # ``s3://`` / ``gcs://`` when this is None.
         config_file_path = kwargs.pop("config_file_path", None)
+
+        # Backward-compat: jwt_client_id_field was renamed to virtual_key_claim_field
+        if "jwt_client_id_field" in kwargs:
+            if "virtual_key_claim_field" not in kwargs:
+                kwargs["virtual_key_claim_field"] = kwargs.pop("jwt_client_id_field")
+            else:
+                kwargs.pop("jwt_client_id_field")
 
         # get the attribute names for this Pydantic model
         allowed_keys = LiteLLM_JWTAuth.__annotations__.keys()
