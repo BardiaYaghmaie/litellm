@@ -1,14 +1,14 @@
 import React from "react";
 import { Button, TextInput } from "@tremor/react";
-import { MCPTool, InputSchema, InputSchemaProperty } from "./types";
+import { MCPTool, MCPContent, InputSchema, InputSchemaProperty } from "./types";
 import { Form, Select, Tooltip } from "antd";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import NotificationsManager from "../molecules/notifications_manager";
 
-const isPlainObject = (value: unknown): value is Record<string, any> =>
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-function buildArrayItems(items?: InputSchemaProperty | InputSchemaProperty[]): any[] {
+function buildArrayItems(items?: InputSchemaProperty | InputSchemaProperty[]): unknown[] {
   if (!items) {
     return [];
   }
@@ -25,7 +25,7 @@ function buildArrayItems(items?: InputSchemaProperty | InputSchemaProperty[]): a
   return [itemDefault];
 }
 
-function buildDefaultValue(prop?: InputSchemaProperty, overrideDefault?: any): any {
+function buildDefaultValue(prop?: InputSchemaProperty, overrideDefault?: unknown): unknown {
   if (!prop) {
     return undefined;
   }
@@ -33,7 +33,7 @@ function buildDefaultValue(prop?: InputSchemaProperty, overrideDefault?: any): a
   const effectiveDefault = overrideDefault !== undefined ? overrideDefault : prop.default;
 
   if (prop.type === "object") {
-    const base = isPlainObject(effectiveDefault) ? { ...effectiveDefault } : {};
+    const base: Record<string, unknown> = isPlainObject(effectiveDefault) ? { ...effectiveDefault } : {};
 
     if (prop.properties) {
       Object.entries(prop.properties).forEach(([childKey, childProp]) => {
@@ -89,7 +89,7 @@ function buildDefaultValue(prop?: InputSchemaProperty, overrideDefault?: any): a
   }
 }
 
-const getInitialValueForField = (prop: InputSchemaProperty): any => {
+const getInitialValueForField = (prop: InputSchemaProperty): unknown => {
   const defaultValue = buildDefaultValue(prop);
   if (prop.type === "object" || prop.type === "array") {
     const fallback = prop.type === "array" ? [] : {};
@@ -107,9 +107,9 @@ export function ToolTestPanel({
   onClose,
 }: {
   tool: MCPTool;
-  onSubmit: (args: Record<string, any>) => void;
+  onSubmit: (args: Record<string, unknown>) => void;
   isLoading: boolean;
-  result: any | null;
+  result: MCPContent[] | null;
   error: Error | null;
   onClose: () => void;
 }) {
@@ -161,7 +161,7 @@ export function ToolTestPanel({
       return;
     }
 
-    const initialValues: Record<string, any> = {};
+    const initialValues: Record<string, unknown> = {};
     Object.entries(actualSchema.properties).forEach(([key, prop]) => {
       initialValues[key] = getInitialValueForField(prop);
     });
@@ -169,13 +169,13 @@ export function ToolTestPanel({
     form.setFieldsValue(initialValues);
   }, [form, actualSchema, tool]);
 
-  const handleSubmit = (values: Record<string, any>) => {
+  const handleSubmit = (values: Record<string, unknown>) => {
     const start = Date.now();
     setStartTime(start);
     setDuration(null);
 
     // Convert form values to proper types based on schema
-    const convertedValues: Record<string, any> = {};
+    const convertedValues: Record<string, unknown> = {};
     const schemaToUse = actualSchema;
 
     Object.entries(values).forEach(([key, value]) => {
@@ -409,7 +409,7 @@ export function ToolTestPanel({
                           ...(prop.type === "object" || prop.type === "array"
                             ? [
                                 {
-                                  validator: (_rule: any, value: any) => {
+                                  validator: (_rule: unknown, value: unknown) => {
                                     if (
                                       (value === undefined || value === null || value === "") &&
                                       !actualSchema.required?.includes(key)
@@ -477,7 +477,7 @@ export function ToolTestPanel({
                             type="number"
                             step={prop.type === "integer" ? 1 : "any"}
                             placeholder={prop.description || `Enter ${key}`}
-                            defaultValue={initialValue ?? 0}
+                            defaultValue={(initialValue as number) ?? 0}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-colors"
                           />
                         )}
@@ -685,7 +685,7 @@ export function ToolTestPanel({
                     <div className="space-y-3">
                       {viewMode === "formatted" ? (
                         // Formatted View
-                        result.map((content: any, idx: number) => (
+                        result.map((content, idx) => (
                           <div key={idx} className="border border-gray-200 rounded-lg overflow-hidden">
                             {content.type === "text" && (
                               <div>
